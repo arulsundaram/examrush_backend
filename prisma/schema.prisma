@@ -1,0 +1,274 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  videoProgress   UserVideoProgress[]
+  gamification    UserGamification?
+  achievements    UserAchievement[]
+  labCompletions  LabCompletion[]
+  topicEngagements TopicEngagement[]
+  skillMastery    SkillMastery[]
+
+  @@map("users")
+}
+
+model Video {
+  id             String      @id @default(uuid())
+  title          String
+  description    String
+  durationSeconds Int        @map("duration_seconds")
+  level          VideoLevel
+  thumbnailUrl   String?     @map("thumbnail_url")
+  videoUrl       String?     @map("video_url")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  tags           VideoTag[]
+  topics         VideoTopic[]
+  userProgress   UserVideoProgress[]
+
+  @@map("videos")
+}
+
+model VideoTag {
+  id       String @id @default(uuid())
+  videoId String @map("video_id")
+  tag     String
+
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, tag])
+  @@map("video_tags")
+}
+
+model TopicSkillMap {
+  id          String   @id @default(uuid())
+  topicId     String   @map("topic_id")
+  skillId     String   @map("skill_id")
+  skillName   String   @map("skill_name")
+  weight      Float    @default(1.0) // Weight/importance of this skill for this topic
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  topic       VideoTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([topicId, skillId])
+  @@index([topicId])
+  @@index([skillId])
+  @@map("topic_skill_maps")
+}
+
+model VideoTopic {
+  id               String   @id @default(uuid())
+  videoId          String   @map("video_id")
+  title            String
+  startSeconds     Int      @map("start_seconds")
+  endSeconds       Int      @map("end_seconds")
+  keywords         String[] @default([])
+  transcriptExcerpt String? @map("transcript_excerpt") @db.Text
+
+  // Tutor screen enrichment:
+  techTags         String[] @default([]) @map("tech_tags")
+  keyConcepts      Json     @default("[]") @map("key_concepts")
+  highlights       Json     @default("[]")
+  examAngleNotes   String?  @map("exam_angle_notes") @db.Text
+
+  video            Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  topicMaps        TopicSkillMap[]
+  engagements      TopicEngagement[]
+  examTopics       ExamTopic[]
+
+  @@index([videoId])
+  @@map("video_topics")
+}
+
+model UserVideoProgress {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  videoId           String   @map("video_id")
+  progressPercent   Int      @map("progress_percent") @default(0)
+  lastPositionSeconds Int    @map("last_position_seconds") @default(0)
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video             Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@map("user_video_progress")
+}
+
+model UserGamification {
+  userId        String   @id @map("user_id")
+  xp            Int      @default(0)
+  streakCount   Int      @default(0) @map("streak_count")
+  lastActiveDate DateTime @default(now()) @map("last_active_date")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_gamification")
+}
+
+model UserAchievement {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  achievementType String @map("achievement_type")
+  earnedAt    DateTime @default(now()) @map("earned_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_achievements")
+}
+
+model LabCompletion {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  labId       String   @map("lab_id")
+  completedAt DateTime @default(now()) @map("completed_at")
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lab         LabExercise @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, labId])
+  @@map("lab_completions")
+}
+
+enum TopicEngagementType {
+  View
+  Replay
+  PromptSearch
+}
+
+model TopicEngagement {
+  id        String              @id @default(uuid())
+  userId    String              @map("user_id")
+  topicId   String              @map("topic_id")
+  eventType TopicEngagementType @map("event_type")
+  metadata  Json?
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  topic     VideoTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@index([userId, topicId, eventType])
+  @@map("topic_engagements")
+}
+
+model SkillMastery {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  skillId       String   @map("skill_id")
+  skillName     String   @map("skill_name")
+  masteryScore  Float    @default(0) @map("mastery_score") // 0-100
+  confidence    String?  // Low, Medium, High
+  lastAssessedAt DateTime? @map("last_assessed_at")
+  lastPromptUsed DateTime? @map("last_prompt_used")
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, skillId])
+  @@index([userId])
+  @@map("skill_mastery")
+}
+
+model Exam {
+  id          String   @id @default(uuid())
+  code        String   @unique // e.g., "AI-900", "AZ-900"
+  title       String
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  domains     ExamDomain[]
+  topics      ExamTopic[]
+
+  @@map("exams")
+}
+
+model ExamDomain {
+  id          String   @id @default(uuid())
+  examId      String   @map("exam_id")
+  code        String
+  title       String
+  description String?  @db.Text
+
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  objectives   ExamObjective[]
+
+  @@unique([examId, code])
+  @@map("exam_domains")
+}
+
+model ExamObjective {
+  id          String   @id @default(uuid())
+  domainId    String   @map("domain_id")
+  code        String
+  title       String
+  description String?  @db.Text
+  skillIds    String[] @default([]) @map("skill_ids")
+
+  domain      ExamDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  topics      ExamTopic[]
+
+  @@unique([domainId, code])
+  @@map("exam_objectives")
+}
+
+model ExamTopic {
+  id          String   @id @default(uuid())
+  examId      String   @map("exam_id")
+  objectiveId String   @map("objective_id")
+  topicId     String   @map("topic_id")
+
+  exam        Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  objective    ExamObjective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  topic       VideoTopic @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, topicId])
+  @@map("exam_topics")
+}
+
+model LabExercise {
+  id          String   @id @default(uuid())
+  title       String
+  description String?  @db.Text
+  steps       Json     // Array of {id, title, description, checklist}
+  tags        String[] @default([])
+  skillIds    String[] @default([]) @map("skill_ids")
+  topicIds    String[] @default([]) @map("topic_ids")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  completions LabCompletion[]
+
+  @@map("lab_exercises")
+}
+
+model Drill {
+  id          String   @id @default(uuid())
+  title       String
+  description String?  @db.Text
+  questions   Json     // Array of {id, questionText, options[{id, text}], correctAnswerId, explanation}
+  skillIds    String[] @default([]) @map("skill_ids")
+  topicIds    String[] @default([]) @map("topic_ids")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("drills")
+}
+
+enum VideoLevel {
+  Beginner
+  Intermediate
+  Advanced
+}
+
