@@ -164,7 +164,8 @@ router.get('/:code', async (req, res) => {
 
     // Collect all unique videos and topics
     const allVideos = new Map();
-    const allTopics = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allTopics: any[] = [];
     const techTagsMap = new Map();
     const conceptVideosMap = new Map();
 
