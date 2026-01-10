@@ -7,8 +7,18 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
+# Copy shared package
+COPY packages/shared ./packages/shared/
+
+# Install dependencies (including workspace packages)
 RUN npm ci
+
+# Build shared package first
+WORKDIR /app/packages/shared
+RUN npm install && npm run build
+
+# Go back to app root
+WORKDIR /app
 
 # Generate Prisma client
 RUN npx prisma generate
@@ -33,11 +43,15 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production
+RUN npm ci --omit=dev || npm install --omit=dev
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma/
 RUN npx prisma generate
+
+# Copy shared package (built)
+COPY --from=builder /app/packages/shared/dist ./node_modules/@ai-video-learning/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./node_modules/@ai-video-learning/shared/
 
 # Copy built files from builder stage
 COPY --from=builder /app/dist ./dist
@@ -61,4 +75,3 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 
 # Start the application
 CMD ["node", "dist/index.js"]
-
