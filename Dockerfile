@@ -2,7 +2,7 @@
 FROM node:20-slim AS builder
 
 # Install OpenSSL for Prisma
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ COPY prisma ./prisma/
 # Copy shared package
 COPY packages/shared ./packages/shared/
 
-# Install dependencies (including workspace packages)
+# Install dependencies
 RUN npm ci
 
 # Build shared package first
@@ -23,7 +23,7 @@ RUN npm install && npm run build
 # Go back to app root
 WORKDIR /app
 
-# Generate Prisma client
+# Generate Prisma client with correct binary
 RUN npx prisma generate
 
 # Copy source code
@@ -37,7 +37,7 @@ RUN npm run build
 FROM node:20-slim AS production
 
 # Install OpenSSL for Prisma
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -49,7 +49,7 @@ RUN groupadd -g 1001 nodejs && \
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN npm ci --omit=dev
 
 # Copy Prisma schema and generate client
 COPY prisma ./prisma/
